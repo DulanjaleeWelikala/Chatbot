@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MicoTalk AI</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.3.1/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      background: url('https://images.unsplash.com/photo-1517511620798-cec17d428bc0') no-repeat center center fixed;
+      background-size: cover;
+      font-family: 'Segoe UI', sans-serif;
+    }
+    .chat-wrapper {
+      height: 100vh;
+      background-color: rgba(255, 255, 255, 0.9);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .chat-box {
+      width: 100%;
+      max-width: 1000px;
+      height: 90vh;
+      border-radius: 15px;
+      display: flex;
+      flex-direction: column;
+      background-color: #ffffff;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+      animation: fadeInUp 0.8s ease;
+    }
+    .chat-header {
+      padding: 15px;
+      background: #4a90e2;
+      color: #fff;
+      border-top-left-radius: 15px;
+      border-top-right-radius: 15px;
+      display: flex;
+      align-items: center;
+    }
+    .chat-header img {
+      height: 40px;
+      margin-right: 10px;
+    }
+    .chat-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      background-color: #f7f7f7;
+    }
+    .message {
+      max-width: 80%;
+      margin: 10px 0;
+      padding: 10px 15px;
+      border-radius: 15px;
+      position: relative;
+      display: flex;
+      align-items: flex-end;
+    }
+    .user-message {
+      background: #DCF8C6;
+      margin-left: auto;
+      border-bottom-right-radius: 5px;
+      flex-direction: row-reverse;
+    }
+    .bot-message {
+      background: #fff;
+      margin-right: auto;
+      border-bottom-left-radius: 5px;
+    }
+    .message-avatar {
+      width: 35px;
+      height: 35px;
+      border-radius: 50%;
+      margin: 0 10px;
+    }
+    .timestamp {
+      font-size: 0.75rem;
+      color: #666;
+      margin-top: 5px;
+    }
+    .input-group {
+      border-top: 1px solid #ccc;
+      padding: 10px;
+      background: #fff;
+    }
+    .animated-input {
+      border-radius: 25px;
+      padding: 12px 18px;
+      transition: all 0.3s ease;
+      box-shadow: inset 0 0 5px rgba(0,0,0,0.05);
+      font-size: 1rem;
+    }
+    .animated-input:focus {
+      outline: none;
+      box-shadow: 0 0 5px rgba(74,144,226,0.6);
+      border-color: #4a90e2;
+      background-color: #f9f9f9;
+    }
+    .btn-send, .btn-mic {
+      border-radius: 20px;
+      margin-left: 5px;
+    }
+    .loader {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #3498db;
+      border-radius: 50%;
+      width: 25px;
+      height: 25px;
+      animation: spin 1s linear infinite;
+    }
+    input[type="file"] {
+      display: none;
+    }
+    label[for="fileUpload"] {
+      cursor: pointer;
+      margin-left: 10px;
+      font-size: 1.3rem;
+      color: #555;
+    }
+    .icon-animated:hover {
+      transform: scale(1.2);
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+  <div class="chat-wrapper">
+    <div class="chat-box" id="dropZone">
+      <div class="chat-header">
+        <img src="https://cdn-icons-png.flaticon.com/512/4712/4712109.png" alt="Bot Icon" />
+        <h3>MicoTalk AI</h3>
+      </div>
+      <div class="chat-container" id="chatContainer"></div>
+
+      <div class="input-group d-flex align-items-center">
+        <input type="text" id="userInput" class="form-control animated-input" placeholder="Type your message..." onkeypress="if(event.keyCode === 13) sendMessage()" />
+        <input type="file" id="fileUpload" accept="image/*" onchange="handleFileUpload(event)">
+        <label for="fileUpload"><i class="bi bi-paperclip icon-animated"></i></label>
+        <button class="btn btn-secondary btn-mic icon-animated" onclick="startVoiceInput()"><i class="bi bi-mic-fill"></i></button>
+        <button class="btn btn-primary btn-send icon-animated" onclick="sendMessage()"><i class="bi bi-send-fill"></i></button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function sendMessage() {
+      const input = document.getElementById('userInput');
+      const userMessage = input.value.trim();
+      const chatContainer = document.getElementById('chatContainer');
+
+      if (!userMessage) return;
+
+      addMessage(userMessage, 'user');
+      input.value = '';
+
+      const loaderDiv = document.createElement('div');
+      loaderDiv.className = 'message bot-message';
+      loaderDiv.innerHTML = `
+        <img src="https://cdn-icons-png.flaticon.com/512/4712/4712109.png" class="message-avatar" />
+        <div class="loader"></div>
+      `;
+      chatContainer.appendChild(loaderDiv);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+
+      try {
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer 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',
+            'HTTP-Referer': 'https://www.sitename.com',
+            'X-Title': 'SiteName',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'deepseek/deepseek-r1:free',
+            messages: [{ role: 'user', content: userMessage }],
+          }),
+        });
+
+        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+
+        const data = await response.json();
+        const botResponse = data.choices?.[0]?.message?.content || 'No response received.';
+        loaderDiv.remove();
+        addMessage(marked.parse(botResponse), 'bot');
+      } catch (error) {
+        loaderDiv.remove();
+        addMessage(`Error: ${error.message}`, 'bot');
+      } finally {
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+      }
+    }
+
+    function addMessage(content, sender) {
+      const chatContainer = document.getElementById('chatContainer');
+      const messageDiv = document.createElement('div');
+      const avatarUrl = sender === 'user'
+        ? 'https://cdn-icons-png.flaticon.com/512/149/149071.png'
+        : 'https://cdn-icons-png.flaticon.com/512/4712/4712109.png';
+
+      messageDiv.className = `message ${sender}-message`;
+      messageDiv.innerHTML = `
+        <img src="${avatarUrl}" class="message-avatar" />
+        <div>
+          ${content}
+          <div class="timestamp">${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+        </div>
+      `;
+      chatContainer.appendChild(messageDiv);
+    }
+
+    function handleFileUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const image = `<img src="${e.target.result}" style="max-width: 200px; border-radius: 10px;" />`;
+        addMessage(image, 'user');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function startVoiceInput() {
+      if (!('webkitSpeechRecognition' in window)) {
+        alert("Voice recognition not supported.");
+        return;
+      }
+
+      const recognition = new webkitSpeechRecognition();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.start();
+
+      recognition.onresult = function(event) {
+        document.getElementById('userInput').value = event.results[0][0].transcript;
+        sendMessage();
+      };
+
+      recognition.onerror = function(event) {
+        alert("Voice input error: " + event.error);
+      };
+    }
+
+    // Drag & Drop Upload
+    const dropZone = document.getElementById('dropZone');
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.style.background = '#eef6ff';
+    });
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.style.background = '';
+    });
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.style.background = '';
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = function(event) {
+          const img = `<img src="${event.target.result}" style="max-width: 200px; border-radius: 10px;" />`;
+          addMessage(img, 'user');
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+  </script>
+</body>
+</html>
